@@ -51,7 +51,7 @@ private:
     void initTree();
     Node* branching(BranchingStrategy strategy = DFS);
 
-    Node* solveHungarian(Node* node);
+    void solveHungarian(Node* node);
 };
 
 #endif

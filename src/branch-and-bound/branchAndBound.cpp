@@ -1,4 +1,4 @@
-#include "branchAndbound.h"
+#include "branchAndBound.h"
 
 BranchAndBound::BranchAndBound(Node* root, double** costMatrix, int dimension) {
     this->root = root;
@@ -9,11 +9,11 @@ BranchAndBound::BranchAndBound(Node* root, double** costMatrix, int dimension) {
 }
 
 vector<vector<int>> BranchAndBound::getSubTours(hungarian_problem_t& p) {
-    vector<vector<int>> adj(p.num_rows, vector<int>());
+    vector<vector<int>> adj(p.num_rows, vector<int>(1));
     for (int i = 0; i < p.num_rows; i++) {
         for (int j = 0; j < p.num_cols; j++) {
             if (p.assignment[i][j] == HUNGARIAN_ASSIGNED) {
-                adj[i].push_back(j);
+                adj[i][0] = j;
             }
         }
     }
@@ -24,16 +24,16 @@ vector<vector<int>> BranchAndBound::getSubTours(hungarian_problem_t& p) {
         vector<int> tour;
         //se chegou no final da lista e não voltou para o i então não é um tour
         if (inTuor[i]) continue;
-        tour.push_back(i);
+        tour.emplace_back(i);
         int j = i;
         while (true) {
             inTuor[j] = true;
             j = adj[j][0];
-            tour.push_back(j);
+            tour.emplace_back(j);
 
             if (j == i) break;
         }
-        tours.push_back(tour);
+        tours.emplace_back(tour);
     }
 
     return tours;
@@ -64,7 +64,7 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy) {
 
     while (!tree.empty()) {
         Node* currentNode = branching(strategy);
-        currentNode = solveHungarian(currentNode);
+        solveHungarian(currentNode);
 
         if (currentNode->lowerBound > upperBound) {
             delete currentNode;
@@ -78,8 +78,8 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy) {
             {
                 auto n = new Node;
                 n->forbiddenArcs = currentNode->forbiddenArcs;
-                n->forbiddenArcs.push_back(arc);
-                tree.push_back(n);
+                n->forbiddenArcs.emplace_back(arc);
+                tree.emplace_back(n);
             }
         }
         delete currentNode;
@@ -94,7 +94,7 @@ void BranchAndBound::initTree() {
         auto n = new Node();
         n->forbiddenArcs = {arc};
 
-        tree.push_back(n);
+        tree.emplace_back(n);
     }
 }
 
@@ -108,7 +108,7 @@ void print_tours(vector<vector<int>> &tours) {
     }
 }
 
-Node* BranchAndBound::solveHungarian(Node* node) {
+void BranchAndBound::solveHungarian(Node* node) {
     double** c = new double*[dimension];
     for (int i = 0; i < dimension; i++) {
         c[i] = new double[dimension];
@@ -124,6 +124,12 @@ Node* BranchAndBound::solveHungarian(Node* node) {
     hungarian_problem_t p;
     int mode = HUNGARIAN_MODE_MINIMIZE_COST;
     hungarian_init(&p, c, dimension, dimension, mode);
+
+    for (int i = 0; i < dimension; i++)
+    {
+        delete c[i];
+    }
+    delete c;
 
     double obj_value = hungarian_solve(&p);
 
@@ -143,8 +149,6 @@ Node* BranchAndBound::solveHungarian(Node* node) {
     }
 
     hungarian_free(&p);
-    delete [] c;
-    return node;
 }
 
 Node *BranchAndBound::branching(const BranchingStrategy strategy) {
