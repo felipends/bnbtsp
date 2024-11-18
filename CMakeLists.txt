@@ -17,5 +17,12 @@ set(SOURCE_FILES
     ./src/branch-and-bound/branchAndBound.cpp
 )
 
+add_custom_target(run
+        COMMAND ${CMAKE_BINARY_DIR}/${PROJECT_NAME} ${CMAKE_BINARY_DIR}/../instances/burma14.tsp 1  # Substitua param1 e param2 pelos valores reais
+        DEPENDS ${PROJECT_NAME}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Compilando e executando o projeto com parâmetros..."
+)
+
 add_compile_options(-O3 -Wall -Wextra -Wpedantic)
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
