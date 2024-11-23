@@ -39,32 +39,64 @@ vector<vector<int>> BranchAndBound::getSubTours(hungarian_problem_t& p) {
     return tours;
 }
 
-vector<pair<int, int>> BranchAndBound::getForbiddenArcs(const vector<vector<int>> *subTours) {
-    //find smallest subTour
-    int smallestTour = 0;
-    for (int i = 1; i < subTours->size(); i++) {
-        if (subTours->at(i).size() < subTours->at(smallestTour).size()) {
-            smallestTour = i;
-        }
-    }
+vector<pair<int, int>> BranchAndBound::getForbiddenArcs(const vector<vector<int>> *subTours, int dimension, const BranchRule rule) {
+    vector<pair<int, int>> forbiddenArcs;
 
-    vector<int> chosenSubTour = subTours->at(smallestTour);
-    vector<pair<int, int>> forbiddenArcs(chosenSubTour.size() - 1);
-    for (int i = 0; i < chosenSubTour.size() - 1; i++) {
-        forbiddenArcs[i] = {chosenSubTour[i], chosenSubTour[i + 1]};
+    if (rule == SUBTOUR) {
+        //find smallest subTour
+        int smallestTour = 0;
+        for (int i = 1; i < subTours->size(); i++) {
+            if (subTours->at(i).size() < subTours->at(smallestTour).size()) {
+                smallestTour = i;
+            }
+        }
+
+        vector<int> chosenSubTour = subTours->at(smallestTour);
+        forbiddenArcs = vector<pair<int, int>>(chosenSubTour.size() - 1);
+        for (int i = 0; i < chosenSubTour.size() - 1; i++) {
+            forbiddenArcs[i] = {chosenSubTour[i], chosenSubTour[i + 1]};
+        }
+    } else {
+        //find vertex with greater degree
+        vector<int> degrees(dimension, 0);
+        for (auto &tour: *subTours) {
+            for (int i = 0; i < tour.size(); i++) {
+                degrees[tour[i]]++;
+            }
+        }
+
+        int indexMaxDegree = -1;
+        int maxDegree = 0;
+        for (int i = 0; i < dimension; i++) {
+            if (degrees[i] > maxDegree) {
+                maxDegree = degrees[i];
+                indexMaxDegree = i;
+            }
+        }
+
+        //find arcs associated with vertex with greater degree
+        forbiddenArcs = vector<pair<int, int>>();
+        for (auto &tour: *subTours) {
+            for (int i = 1; i < tour.size() - 1; i++) {
+                if (tour[i] == indexMaxDegree) {
+                    forbiddenArcs.push_back({tour[i], tour[i + 1]});
+                    forbiddenArcs.push_back({tour[i-1], tour[i]});
+                }
+            }
+        }
     }
 
     return forbiddenArcs;
 }
 
-Solution *BranchAndBound::solve(const BranchingStrategy strategy) {
+Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver solver) {
     initTree();
 
     double upperBound = INFINITE;
 
     while (!tree.empty()) {
         Node* currentNode = branching(strategy);
-        solveHungarian(currentNode);
+        solveNode(currentNode, solver);
 
         if (currentNode->lowerBound > upperBound) {
             delete currentNode;
@@ -74,18 +106,23 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy) {
         if (currentNode->feasible) {
             upperBound = min(currentNode->lowerBound, upperBound);
         } else {
-            for (auto &arc: getForbiddenArcs(&currentNode->subTours))
-            {
-                auto n = new Node;
-                n->forbiddenArcs = currentNode->forbiddenArcs;
-                n->forbiddenArcs.emplace_back(arc);
-                tree.emplace_back(n);
-            }
+            updateTree(currentNode, solver);
         }
         delete currentNode;
     }
 
     return bestSolution;
+}
+
+void BranchAndBound::updateTree(const Node* node, const Solver solver) {
+    const auto  rule = solver == LAGRANGE ? DEGREE : SUBTOUR;
+    for (auto &arc: getForbiddenArcs(&node->subTours, dimension, rule))
+    {
+        auto n = new Node;
+        n->forbiddenArcs = node->forbiddenArcs;
+        n->forbiddenArcs.emplace_back(arc);
+        tree.emplace_back(n);
+    }
 }
 
 void BranchAndBound::initTree() {
@@ -149,6 +186,49 @@ void BranchAndBound::solveHungarian(Node* node) {
     }
 
     hungarian_free(&p);
+}
+
+vector<vector<int>> convertTreeToTour(vector<pair<int, int>> tree) {
+    vector<vector<int>> tours;
+    vector<int> tour;
+    for (auto &arc: tree) {
+        tour.push_back(arc.first);
+        tour.push_back(arc.second);
+    }
+    tours.push_back(tour);
+    return tours;
+}
+
+void BranchAndBound::solveLagrange(Node* node) {
+    double** c = new double*[dimension];
+    for (int i = 0; i < dimension; i++) {
+        c[i] = new double[dimension];
+        for (int j = 0; j < dimension; j++) {
+            c[i][j] = costMatrix[i][j];
+        }
+    }
+
+    for (auto &arc: node->forbiddenArcs) {
+        c[arc.first][arc.second] = INFINITE;
+    }
+
+    //TODO: get lambda from node
+    auto lagrangian = new Lagrangian(c, dimension, vector<double>(dimension, 0), 0);
+    auto solution = lagrangian->solve();
+
+    node->lowerBound = solution.cost;
+    node->subTours = convertTreeToTour(solution.edges);
+}
+
+void BranchAndBound::solveNode(Node* node, const Solver solver) {
+    switch (solver)
+    {
+        case LAGRANGE:
+            solveLagrange(node);
+            break;
+        default:
+            solveHungarian(node);
+    }
 }
 
 Node *BranchAndBound::branching(const BranchingStrategy strategy) {
