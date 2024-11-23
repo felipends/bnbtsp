@@ -6,5 +6,5 @@ Implementação inclui a opção de resolver o TSP com a estratégia de branchin
 ```bash
 cmake -B build
 make -C build
-./build/tsp <arquivo de entrada> <branching strategy (0 - DFS|1 - BFS|2 - BEST BOUND)>
+./build/tsp <arquivo de entrada> <branching strategy (0 - DFS|1 - BFS)> <solver (0 - HUNGARIAN|1 - LAGRANGIAN)> <UB - number: upperbound conhecido para instância>
 ```
