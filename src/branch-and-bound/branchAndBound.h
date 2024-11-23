@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "../hungarian/Hungarian.h"
+#include "../lagrangian-relaxation/lagrangian.h"
 #define INFINITE 99999999
 
 using namespace std;
@@ -32,14 +33,26 @@ enum BranchingStrategy
     BEST_BOUND
 };
 
+enum Solver
+{
+    HUNGARIAN,
+    LAGRANGE
+};
+
+enum BranchRule
+{
+    DEGREE,
+    SUBTOUR
+};
+
 class BranchAndBound {
 public:
     BranchAndBound(Node* root, double** costMatrix, int dimension);
 
-    Solution* solve(BranchingStrategy strategy = DFS);
+    Solution* solve(BranchingStrategy strategy = DFS, Solver solver = HUNGARIAN);
 
     static vector<vector<int>> getSubTours(hungarian_problem_t &p);
-    static vector<pair<int, int>> getForbiddenArcs(const vector<vector<int>> *subTours);
+    static vector<pair<int, int>> getForbiddenArcs(const vector<vector<int>> *subTours, int dimension, const BranchRule rule = SUBTOUR);
 private:
     list<Node*> tree;
     Node* root;
@@ -52,6 +65,9 @@ private:
     Node* branching(BranchingStrategy strategy = DFS);
 
     void solveHungarian(Node* node);
+    void solveLagrange(Node* node);
+    void solveNode(Node* node, Solver solver);
+    void updateTree(const Node* node, Solver solver);
 };
 
 #endif

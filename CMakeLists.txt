@@ -15,6 +15,10 @@ set(SOURCE_FILES
     ./src/main.cpp
     ./src/branch-and-bound/branchAndBound.h
     ./src/branch-and-bound/branchAndBound.cpp
+        src/lagrangian-relaxation/lagrangian.cpp
+        src/lagrangian-relaxation/lagrangian.h
+        src/lagrangian-relaxation/mst/Kruskal.cpp
+        src/lagrangian-relaxation/mst/Kruskal.h
 )
 
 add_custom_target(run
