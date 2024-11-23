@@ -1,11 +1,12 @@
 #include "branchAndBound.h"
 
-BranchAndBound::BranchAndBound(Node* root, double** costMatrix, int dimension) {
+BranchAndBound::BranchAndBound(Node* root, double** costMatrix, int dimension, double UB) {
     this->root = root;
     this->lowerBound = INFINITE;
     this->bestSolution = new Solution();
     this->costMatrix = costMatrix;
     this->dimension = dimension;
+    this->UB = UB;
 }
 
 vector<vector<int>> BranchAndBound::getSubTours(hungarian_problem_t& p) {
@@ -39,66 +40,102 @@ vector<vector<int>> BranchAndBound::getSubTours(hungarian_problem_t& p) {
     return tours;
 }
 
-vector<pair<int, int>> BranchAndBound::getForbiddenArcs(const vector<vector<int>> *subTours, int dimension, const BranchRule rule) {
+vector<pair<int, int>> BranchAndBound::getForbiddenArcs(const vector<pair<int, int>>* tree, int dimension) {
     vector<pair<int, int>> forbiddenArcs;
+    //find vertex with greater degree
+    vector<int> degrees(dimension, 0);
+    for (auto &arc: *tree) {
+        degrees[arc.first]++;
+        degrees[arc.second]++;
+        // cout << arc.first << " " << arc.second << endl;
+    }
 
-    if (rule == SUBTOUR) {
-        //find smallest subTour
-        int smallestTour = 0;
-        for (int i = 1; i < subTours->size(); i++) {
-            if (subTours->at(i).size() < subTours->at(smallestTour).size()) {
-                smallestTour = i;
-            }
+    int maxDegree = 0;
+    int maxDegreeVertex = -1;
+    for (int i = 0; i < dimension; i++) {
+        if (degrees[i] > maxDegree) {
+            maxDegree = degrees[i];
+            maxDegreeVertex = i;
         }
+    }
 
-        vector<int> chosenSubTour = subTours->at(smallestTour);
-        forbiddenArcs = vector<pair<int, int>>(chosenSubTour.size() - 1);
-        for (int i = 0; i < chosenSubTour.size() - 1; i++) {
-            forbiddenArcs[i] = {chosenSubTour[i], chosenSubTour[i + 1]};
-        }
-    } else {
-        //find vertex with greater degree
-        vector<int> degrees(dimension, 0);
-        for (auto &tour: *subTours) {
-            for (int i = 0; i < tour.size(); i++) {
-                degrees[tour[i]]++;
-            }
-        }
+    // cout << maxDegree << ", " << maxDegreeVertex  << endl;
+    if (maxDegree < 3) {
+        return forbiddenArcs;
+    }
 
-        int indexMaxDegree = -1;
-        int maxDegree = 0;
-        for (int i = 0; i < dimension; i++) {
-            if (degrees[i] > maxDegree) {
-                maxDegree = degrees[i];
-                indexMaxDegree = i;
-            }
-        }
-
-        //find arcs associated with vertex with greater degree
-        forbiddenArcs = vector<pair<int, int>>();
-        for (auto &tour: *subTours) {
-            for (int i = 1; i < tour.size() - 1; i++) {
-                if (tour[i] == indexMaxDegree) {
-                    forbiddenArcs.push_back({tour[i], tour[i + 1]});
-                    forbiddenArcs.push_back({tour[i-1], tour[i]});
-                }
-            }
+    //extract forbidden arcs from tree
+    for (auto &arc: *tree) {
+        if (arc.first == maxDegreeVertex || arc.second == maxDegreeVertex) {
+            forbiddenArcs.emplace_back(arc);
         }
     }
 
     return forbiddenArcs;
 }
 
+vector<pair<int, int>> BranchAndBound::getForbiddenArcs(const vector<vector<int>> *subTours, int dimension) {
+    vector<pair<int, int>> forbiddenArcs;
+
+    //find smallest subTour
+    int smallestTour = 0;
+    for (int i = 1; i < subTours->size(); i++) {
+        if (subTours->at(i).size() < subTours->at(smallestTour).size()) {
+            smallestTour = i;
+        }
+    }
+
+    vector<int> chosenSubTour = subTours->at(smallestTour);
+    forbiddenArcs = vector<pair<int, int>>(chosenSubTour.size() - 1);
+    for (int i = 0; i < chosenSubTour.size() - 1; i++) {
+        forbiddenArcs[i] = {chosenSubTour[i], chosenSubTour[i + 1]};
+    }
+
+    return forbiddenArcs;
+}
+
+void printNode(Node* node) {
+    cout << "Node" << endl;
+    cout << "Lower bound: " << node->lowerBound << endl;
+    cout << "Feasible: " << node->feasible << endl;
+    cout << "Forbidden arcs: " << endl;
+    for (auto &arc: node->forbiddenArcs) {
+        cout << arc.first << " " << arc.second << endl;
+    }
+    cout << "Sub tours: " << endl;
+    for (auto &tour: node->subTours) {
+        for (auto &node: tour) {
+            cout << node << " ";
+        }
+        cout << endl;
+    }
+
+    if (node->lambda.size() > 0) {
+        cout << "Lambda: " << endl;
+        for (auto &l: node->lambda) {
+            cout << l << " ";
+        }
+        cout << endl;
+    }
+}
+
 Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver solver) {
-    initTree();
+    initTree(solver);
 
-    double upperBound = INFINITE;
+    double upperBound = solver == LAGRANGE ? root->lowerBound : INFINITE;
 
+    int i = 0;
     while (!tree.empty()) {
+        // if (i++ == 100)
+        // {
+        //     break;
+        // }
         Node* currentNode = branching(strategy);
         solveNode(currentNode, solver);
 
-        if (currentNode->lowerBound > upperBound) {
+        //printNode(currentNode);
+
+        if (currentNode->lowerBound > upperBound + 1) {
             delete currentNode;
             continue;
         }
@@ -115,21 +152,39 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver s
 }
 
 void BranchAndBound::updateTree(const Node* node, const Solver solver) {
-    const auto  rule = solver == LAGRANGE ? DEGREE : SUBTOUR;
-    for (auto &arc: getForbiddenArcs(&node->subTours, dimension, rule))
-    {
-        auto n = new Node;
-        n->forbiddenArcs = node->forbiddenArcs;
-        n->forbiddenArcs.emplace_back(arc);
-        tree.emplace_back(n);
+    if (solver == LAGRANGE) {
+        for (auto &arc: getForbiddenArcs(&node->tree, dimension))
+        {
+            auto n = new Node;
+            n->forbiddenArcs = node->forbiddenArcs;
+            n->forbiddenArcs.emplace_back(arc);
+            n->lambda = node->lambda;
+            tree.emplace_back(n);
+        }
+    } else {
+        for (auto &arc: getForbiddenArcs(&node->subTours, dimension))
+        {
+            auto n = new Node;
+            n->forbiddenArcs = node->forbiddenArcs;
+            n->forbiddenArcs.emplace_back(arc);
+
+            tree.emplace_back(n);
+        }
     }
 }
 
-void BranchAndBound::initTree() {
+void BranchAndBound::initTree(Solver solver) {
+    // cout << "Root forbidden arcs: " << root->forbiddenArcs.size() << endl;
+    tree.emplace_back(root);
     for (auto &arc: root->forbiddenArcs)
     {
         auto n = new Node();
-        n->forbiddenArcs = {arc};
+        n->forbiddenArcs = vector<pair<int, int>>();//root->forbiddenArcs;
+        n->forbiddenArcs.emplace_back(arc);
+        n->feasible = root->feasible;
+        if (solver == LAGRANGE) {
+            n->lambda = root->lambda;
+        }
 
         tree.emplace_back(n);
     }
@@ -188,17 +243,6 @@ void BranchAndBound::solveHungarian(Node* node) {
     hungarian_free(&p);
 }
 
-vector<vector<int>> convertTreeToTour(vector<pair<int, int>> tree) {
-    vector<vector<int>> tours;
-    vector<int> tour;
-    for (auto &arc: tree) {
-        tour.push_back(arc.first);
-        tour.push_back(arc.second);
-    }
-    tours.push_back(tour);
-    return tours;
-}
-
 void BranchAndBound::solveLagrange(Node* node) {
     double** c = new double*[dimension];
     for (int i = 0; i < dimension; i++) {
@@ -210,14 +254,39 @@ void BranchAndBound::solveLagrange(Node* node) {
 
     for (auto &arc: node->forbiddenArcs) {
         c[arc.first][arc.second] = INFINITE;
+        c[arc.second][arc.first] = INFINITE;
     }
 
-    //TODO: get lambda from node
-    auto lagrangian = new Lagrangian(c, dimension, vector<double>(dimension, 0), 0);
+    // cout << "NODE NO SOLVE LAGRANGE. ARVORE: " << tree.size() << endl;
+    // printNode(node);
+    // cout << "FIM DO NODE NO SOLVE LAGRANGE: " << endl;
+
+    auto lagrangian = new Lagrangian(c, dimension, node->lambda, UB);
     auto solution = lagrangian->solve();
 
+    // //print solution
+    // cout << "Solution cost: " << solution.cost << endl;
+    // for (auto &edge: solution.edges) {
+    //     cout << edge.first << " " << edge.second << endl;
+    // }
+    // cout << "Solution printed ======================" << endl;
+
     node->lowerBound = solution.cost;
-    node->subTours = convertTreeToTour(solution.edges);
+    node->tree = solution.edges;
+    node->lambda = solution.lambda;
+    node->feasible = solution.feasible;
+
+    if (node->feasible && solution.cost < lowerBound) {
+        lowerBound = solution.cost;
+        bestSolution->cost = solution.cost;
+        bestSolution->edges = node->tree;
+    }
+
+    for (int i = 0; i < dimension; i++)
+    {
+        delete c[i];
+    }
+    delete c;
 }
 
 void BranchAndBound::solveNode(Node* node, const Solver solver) {

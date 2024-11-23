@@ -88,7 +88,7 @@ LagrangianSolution Lagrangian::solve() const
         for (int i = 1; i < dimension; i++) {
             lambda[i] += step * (2 - degrees[i]);
         }
-        if (epsilon < E_MIN || currentSolution.cost >= UB || currentSolution.feasible) break;
+        if (epsilon < E_MIN || currentSolution.cost >= UB - numeric_limits<double>::epsilon() || currentSolution.feasible) break;
     }
 
     return bestSolution;
