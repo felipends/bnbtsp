@@ -123,6 +123,7 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver s
     initTree(solver);
 
     double upperBound = solver == LAGRANGE ? root->lowerBound : INFINITE;
+    this->UB = upperBound;
 
     int i = 0;
     while (!tree.empty()) {
@@ -142,6 +143,7 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver s
 
         if (currentNode->feasible) {
             upperBound = min(currentNode->lowerBound, upperBound);
+            UB = upperBound;
         } else {
             updateTree(currentNode, solver);
         }
@@ -252,16 +254,11 @@ void BranchAndBound::solveLagrange(Node* node) {
         }
     }
 
-    for (auto &arc: node->forbiddenArcs) {
-        c[arc.first][arc.second] = INFINITE;
-        c[arc.second][arc.first] = INFINITE;
-    }
-
     // cout << "NODE NO SOLVE LAGRANGE. ARVORE: " << tree.size() << endl;
     // printNode(node);
     // cout << "FIM DO NODE NO SOLVE LAGRANGE: " << endl;
 
-    auto lagrangian = new Lagrangian(c, dimension, node->lambda, UB);
+    auto lagrangian = new Lagrangian(c, node->forbiddenArcs, dimension, node->lambda, UB);
     auto solution = lagrangian->solve();
 
     // //print solution
@@ -276,7 +273,7 @@ void BranchAndBound::solveLagrange(Node* node) {
     node->lambda = solution.lambda;
     node->feasible = solution.feasible;
 
-    if (node->feasible && solution.cost < lowerBound) {
+    if (node->feasible && solution.cost < lowerBound - 0.00001) {
         lowerBound = solution.cost;
         bestSolution->cost = solution.cost;
         bestSolution->edges = node->tree;

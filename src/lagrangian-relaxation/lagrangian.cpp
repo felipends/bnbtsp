@@ -2,7 +2,7 @@
 
 #include "mst/Kruskal.h"
 
-Lagrangian::Lagrangian(double** costMatrix, int dimension, vector<double> lambda, double UB) {
+Lagrangian::Lagrangian(double** costMatrix, vector<pair<int, int>>& forbiddenArcs, int dimension, vector<double> lambda, double UB) {
     this->UB = UB;
     this->lambda = lambda;
     this->costMatrix = vector<vector<double>>();
@@ -15,6 +15,7 @@ Lagrangian::Lagrangian(double** costMatrix, int dimension, vector<double> lambda
     }
 
     this->dimension = dimension;
+    this->forbiddenArcs = forbiddenArcs;
 }
 
 void printEdges(const vector<pair<int, int>>& edges, vector<double> lambda) {
@@ -59,7 +60,9 @@ LagrangianSolution Lagrangian::solve() const
             .lambda = lambda,
             .cost = 0
         };
-        const auto penalizedMatrix = updateCostMatrix(costMatrix, lambda);
+        auto penalizedMatrix = updateCostMatrix(costMatrix, lambda);
+        penalizeForbiddenArcs(penalizedMatrix);
+
         Kruskal kruskal(penalizedMatrix);
         currentSolution.cost = kruskal.MST(dimension);
         currentSolution.edges = kruskal.getEdges();
@@ -72,14 +75,14 @@ LagrangianSolution Lagrangian::solve() const
             currentSolution.feasible = true;
         }
 
-        if (currentSolution.cost > bestSolution.cost) {
+        if (currentSolution.cost > bestSolution.cost + E_MIN) {
             bestSolution = currentSolution;
             k = 0;
         } else {
             k++;
             if (k >= K_MAX) {
                 k = 0;
-                epsilon /= 2;
+                epsilon /= 2.0;
             }
         }
 
@@ -88,7 +91,12 @@ LagrangianSolution Lagrangian::solve() const
         for (int i = 1; i < dimension; i++) {
             lambda[i] += step * (2 - degrees[i]);
         }
-        if (epsilon < E_MIN || currentSolution.cost >= UB - numeric_limits<double>::epsilon() || currentSolution.feasible) break;
+        if (epsilon < E_MIN || currentSolution.cost >= UB + E_MIN || currentSolution.feasible) {
+            cout << "Epsilon: " << epsilon << endl;
+            cout << "cost: " << currentSolution.cost << endl;
+            cout << "feasible: " << currentSolution.feasible << endl;
+            break;
+        }
     }
 
     return bestSolution;
@@ -130,4 +138,12 @@ vector<vector<double>> Lagrangian::updateCostMatrix(vector<vector<double>> costM
     }
 
     return costMatrix;
+}
+
+void Lagrangian::penalizeForbiddenArcs(vector<vector<double>>& costMatrix) const {
+    if (forbiddenArcs.empty()) return;
+    for (auto& arc: forbiddenArcs) {
+        costMatrix[arc.first][arc.second] = INFINITE;
+        costMatrix[arc.second][arc.first] = INFINITE;
+    }
 }

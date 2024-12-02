@@ -32,14 +32,10 @@ vii Kruskal::getEdges(){
     return edges;
 }
 
-bool inVector(int item, vector<int> vec) {
-    return std::find(vec.begin(), vec.end(), item) != vec.end();
-}
-
 double Kruskal::MST(int nodes){
     initDisjoint(nodes);
 
-    double cost = 0;
+    double cost = 0.0;
 
     while(!graph.empty()){
         pair<double, ii> p = graph.top();
@@ -52,11 +48,12 @@ double Kruskal::MST(int nodes){
         }
     }
 
-    //TODO: consider first element of matrix
     vector<int> nearest = {-1, -1};
     for (int j = 0; j < 2; j++) {
         for (int i = 1; i < nodes; i++) {
-            if ((nearest[j] == -1 || dist[0][i] < dist[0][nearest[j]]) && !inVector(i, nearest)) {
+            if ((nearest[j] == -1
+                || dist[0][i] < dist[0][nearest[j]] - 0.0001)
+                && (i != nearest[0] && i != nearest[1])) {
                 nearest[j] = i;
             }
         }

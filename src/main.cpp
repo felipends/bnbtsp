@@ -40,7 +40,8 @@ int main(int argc, char** argv) {
 		hungarian_free(&p);
 	} else if (solvers[atoi(argv[3])] == LAGRANGE) {
 		auto lambda = vector<double>(data->getDimension(), 0);
-		auto lagrangian = new Lagrangian(cost, data->getDimension(), lambda, atof(argv[4]));
+		auto forbiddenArcs = vector<pair<int, int>>();
+		auto lagrangian = new Lagrangian(cost, forbiddenArcs, data->getDimension(), lambda, atof(argv[4]));
 		auto solution = lagrangian->solve();
 		cout << "LB Root: " << solution.cost << endl;
 		//print tree

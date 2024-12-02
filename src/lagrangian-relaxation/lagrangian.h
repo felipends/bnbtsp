@@ -5,6 +5,8 @@
 #define E_MIN 0.000001
 #define K_MAX 30
 
+#define INFINITE 999999999
+
 using namespace std;
 
 typedef struct
@@ -17,7 +19,7 @@ typedef struct
 
 class Lagrangian {
 public:
-    Lagrangian(double** costMatrix, int dimension, vector<double> lambda, double UB);
+    Lagrangian(double** costMatrix, vector<pair<int, int>>& forbiddenArcs, int dimension, vector<double> lambda, double UB);
 
     LagrangianSolution solve() const;
     bool isFeasible(const vector<int>& verticesDegrees) const;
@@ -30,6 +32,8 @@ private:
     int dimension;
     vector<double> lambda;
     double UB;
+    vector<pair<int, int>> forbiddenArcs;
+    void penalizeForbiddenArcs(vector<vector<double>>& costMatrix) const;
 };
 
 #endif //LAGRANGIAN_H
