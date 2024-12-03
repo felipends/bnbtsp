@@ -68,7 +68,6 @@ private:
     double** costMatrix;
     double UB;
 
-    void initTree(Solver solver);
     Node* branching(BranchingStrategy strategy = DFS);
     void prune(BranchingStrategy strategy);
 

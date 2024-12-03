@@ -122,7 +122,6 @@ void printNode(Node* node) {
 }
 
 Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver solver) {
-    // initTree(solver);
     tree.emplace_back(root);
     double upperBound = solver == LAGRANGE ? UB : INFINITE;
     this->UB = upperBound;
