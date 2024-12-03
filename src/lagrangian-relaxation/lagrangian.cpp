@@ -66,16 +66,9 @@ LagrangianSolution Lagrangian::solve() const
         Kruskal kruskal(penalizedMatrix);
         currentSolution.cost = kruskal.MST(dimension);
         currentSolution.edges = kruskal.getEdges();
+        currentSolution.feasible = isFeasible(getVerticesDegrees(currentSolution.edges, dimension));
 
-        // printMatrix(penalizedMatrix);
-        // printEdges(currentSolution.edges, currentSolution.lambda);
-        // cout << "Cost: " << currentSolution.cost << endl;
-
-        if (isFeasible(getVerticesDegrees(currentSolution.edges, dimension))) {
-            currentSolution.feasible = true;
-        }
-
-        if (currentSolution.cost > bestSolution.cost + E_MIN) {
+        if ((currentSolution.cost - bestSolution.cost) > E_MIN) {
             bestSolution = currentSolution;
             k = 0;
         } else {
@@ -92,9 +85,6 @@ LagrangianSolution Lagrangian::solve() const
             lambda[i] += step * (2 - degrees[i]);
         }
         if (epsilon < E_MIN || currentSolution.cost >= UB + E_MIN || currentSolution.feasible) {
-            cout << "Epsilon: " << epsilon << endl;
-            cout << "cost: " << currentSolution.cost << endl;
-            cout << "feasible: " << currentSolution.feasible << endl;
             break;
         }
     }
@@ -131,9 +121,8 @@ vector<int> Lagrangian::getVerticesDegrees(const vector<pair<int, int>>& edges, 
 
 vector<vector<double>> Lagrangian::updateCostMatrix(vector<vector<double>> costMatrix, const vector<double>& lambda) {
     for (int i = 0; i < costMatrix.size(); i++) {
-        for (int j = 0; j < costMatrix[i].size(); j++) {
+        for (int j = 0; j < costMatrix.size(); j++) {
             if (i != j) costMatrix[i][j] -= lambda[i] + lambda[j];
-            else costMatrix[i][j] = 0;
         }
     }
 
@@ -141,7 +130,6 @@ vector<vector<double>> Lagrangian::updateCostMatrix(vector<vector<double>> costM
 }
 
 void Lagrangian::penalizeForbiddenArcs(vector<vector<double>>& costMatrix) const {
-    if (forbiddenArcs.empty()) return;
     for (auto& arc: forbiddenArcs) {
         costMatrix[arc.first][arc.second] = INFINITE;
         costMatrix[arc.second][arc.first] = INFINITE;

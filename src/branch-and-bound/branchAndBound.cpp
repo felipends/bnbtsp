@@ -1,12 +1,14 @@
 #include "branchAndBound.h"
 
-BranchAndBound::BranchAndBound(Node* root, double** costMatrix, int dimension, double UB) {
-    this->root = root;
+BranchAndBound::BranchAndBound(double** costMatrix, int dimension, double UB) {
     this->lowerBound = INFINITE;
     this->bestSolution = new Solution();
     this->costMatrix = costMatrix;
     this->dimension = dimension;
     this->UB = UB;
+    this->root = new Node();
+    this->root->lambda = vector<double>(dimension, 0);
+    this->tree = list<Node*>();
 }
 
 vector<vector<int>> BranchAndBound::getSubTours(hungarian_problem_t& p) {
@@ -98,7 +100,7 @@ void printNode(Node* node) {
     cout << "Node" << endl;
     cout << "Lower bound: " << node->lowerBound << endl;
     cout << "Feasible: " << node->feasible << endl;
-    cout << "Forbidden arcs: " << endl;
+    cout << "Size: " << node->forbiddenArcs.size() << " Forbidden arcs: " << endl;
     for (auto &arc: node->forbiddenArcs) {
         cout << arc.first << " " << arc.second << endl;
     }
@@ -120,22 +122,17 @@ void printNode(Node* node) {
 }
 
 Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver solver) {
-    initTree(solver);
-
-    double upperBound = solver == LAGRANGE ? root->lowerBound : INFINITE;
+    // initTree(solver);
+    tree.emplace_back(root);
+    double upperBound = solver == LAGRANGE ? UB : INFINITE;
     this->UB = upperBound;
 
-    int i = 0;
     while (!tree.empty()) {
-        // if (i++ == 100)
-        // {
-        //     break;
-        // }
         Node* currentNode = branching(strategy);
+
         solveNode(currentNode, solver);
 
-        //printNode(currentNode);
-
+        prune(strategy);
         if (currentNode->lowerBound > upperBound + 1) {
             delete currentNode;
             continue;
@@ -151,6 +148,18 @@ Solution *BranchAndBound::solve(const BranchingStrategy strategy, const Solver s
     }
 
     return bestSolution;
+}
+
+void BranchAndBound::prune(BranchingStrategy strategy) {
+    switch(strategy)
+    {
+    case BFS:
+        tree.pop_front();
+        break;
+    default:
+        tree.pop_back();
+        break;
+    }
 }
 
 void BranchAndBound::updateTree(const Node* node, const Solver solver) {
@@ -172,23 +181,6 @@ void BranchAndBound::updateTree(const Node* node, const Solver solver) {
 
             tree.emplace_back(n);
         }
-    }
-}
-
-void BranchAndBound::initTree(Solver solver) {
-    // cout << "Root forbidden arcs: " << root->forbiddenArcs.size() << endl;
-    tree.emplace_back(root);
-    for (auto &arc: root->forbiddenArcs)
-    {
-        auto n = new Node();
-        n->forbiddenArcs = vector<pair<int, int>>();//root->forbiddenArcs;
-        n->forbiddenArcs.emplace_back(arc);
-        n->feasible = root->feasible;
-        if (solver == LAGRANGE) {
-            n->lambda = root->lambda;
-        }
-
-        tree.emplace_back(n);
     }
 }
 
@@ -254,26 +246,15 @@ void BranchAndBound::solveLagrange(Node* node) {
         }
     }
 
-    // cout << "NODE NO SOLVE LAGRANGE. ARVORE: " << tree.size() << endl;
-    // printNode(node);
-    // cout << "FIM DO NODE NO SOLVE LAGRANGE: " << endl;
-
     auto lagrangian = new Lagrangian(c, node->forbiddenArcs, dimension, node->lambda, UB);
     auto solution = lagrangian->solve();
-
-    // //print solution
-    // cout << "Solution cost: " << solution.cost << endl;
-    // for (auto &edge: solution.edges) {
-    //     cout << edge.first << " " << edge.second << endl;
-    // }
-    // cout << "Solution printed ======================" << endl;
 
     node->lowerBound = solution.cost;
     node->tree = solution.edges;
     node->lambda = solution.lambda;
     node->feasible = solution.feasible;
 
-    if (node->feasible && solution.cost < lowerBound - 0.00001) {
+    if (node->feasible && solution.cost < lowerBound - 0.0001) {
         lowerBound = solution.cost;
         bestSolution->cost = solution.cost;
         bestSolution->edges = node->tree;
@@ -302,11 +283,9 @@ Node *BranchAndBound::branching(const BranchingStrategy strategy) {
     switch (strategy) {
     case BFS:
         currentNode = tree.front();
-        tree.pop_front();
         break;
     default:
         currentNode = tree.back();
-        tree.pop_back();
         break;
     }
 

@@ -52,7 +52,7 @@ enum BranchRule
 
 class BranchAndBound {
 public:
-    BranchAndBound(Node* root, double** costMatrix, int dimension, double UB = INFINITE);
+    BranchAndBound(double** costMatrix, int dimension, double UB = INFINITE);
 
     Solution* solve(BranchingStrategy strategy = DFS, Solver solver = HUNGARIAN);
 
@@ -70,6 +70,7 @@ private:
 
     void initTree(Solver solver);
     Node* branching(BranchingStrategy strategy = DFS);
+    void prune(BranchingStrategy strategy);
 
     void solveHungarian(Node* node);
     void solveLagrange(Node* node);
